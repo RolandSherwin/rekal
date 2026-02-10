@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code UserPromptSubmit hook (async) — generate early session title."""
+"""Claude Code UserPromptSubmit hook (async) — register session early."""
 
 import json
 import logging
@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rekal.config import load_config
 from rekal.core import RekalStore
-from rekal.llm import generate_title
 
 logging.basicConfig(
     filename=str(Path.home() / ".rekal" / "rekal.log"),
@@ -32,32 +31,14 @@ def main():
         return
 
     session_id = hook_input.get("session_id")
-    prompt = hook_input.get("prompt", "")
     cwd = hook_input.get("cwd", "")
 
-    if not session_id or not prompt:
+    if not session_id:
         return
 
     store = RekalStore(config)
     try:
-        # Check if this session already has a title (not the first prompt)
-        existing = store.conn.execute(
-            "SELECT title FROM sessions WHERE session_id = ?",
-            (session_id,),
-        ).fetchone()
-
-        if existing and existing["title"]:
-            return  # Already has a title, skip
-
-        # Create session and generate early title
         store.ensure_session(session_id, source="claude", workspace_path=cwd)
-        title = generate_title(prompt, config)
-        store.conn.execute(
-            "UPDATE sessions SET title = ? WHERE session_id = ?",
-            (title, session_id),
-        )
-        store.conn.commit()
-        log.info("Early title for %s: %s", session_id[:8], title)
     finally:
         store.close()
 

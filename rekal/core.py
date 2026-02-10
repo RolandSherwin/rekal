@@ -238,7 +238,7 @@ class RekalStore:
                 """SELECT session_id, source, workspace_path, title, summary,
                           started_at, ended_at, turn_count
                    FROM sessions
-                   WHERE workspace_path LIKE ?
+                   WHERE workspace_path LIKE ? AND turn_count > 0
                    ORDER BY started_at DESC LIMIT ?""",
                 (f"%{workspace}%", limit),
             ).fetchall()
@@ -247,6 +247,7 @@ class RekalStore:
                 """SELECT session_id, source, workspace_path, title, summary,
                           started_at, ended_at, turn_count
                    FROM sessions
+                   WHERE turn_count > 0
                    ORDER BY started_at DESC LIMIT ?""",
                 (limit,),
             ).fetchall()

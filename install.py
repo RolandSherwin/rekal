@@ -31,12 +31,6 @@ CLAUDE_HOOKS = {
         "async": True,
         "timeout": 30000,
     },
-    "UserPromptSubmit": {
-        "type": "command",
-        "command": f"python3 {HOOKS_DIR / 'on_prompt.py'}",
-        "async": True,
-        "timeout": 15000,
-    },
 }
 
 MARKER = "# rekal-hook"

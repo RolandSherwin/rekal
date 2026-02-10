@@ -67,7 +67,6 @@ Stored in shared SQLite with FTS5 index
 |-------|-------------|-------|
 | Turn complete | `Stop` hook | `notify` hook |
 | Session end | `SessionEnd` hook | — |
-| New prompt | `UserPromptSubmit` hook | — |
 
 ## Configure
 

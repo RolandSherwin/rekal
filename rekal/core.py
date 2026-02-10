@@ -280,9 +280,9 @@ class RekalStore:
         """Return usage statistics."""
         row = self.conn.execute(
             """SELECT
-                (SELECT COUNT(*) FROM sessions) as total_sessions,
-                (SELECT COUNT(*) FROM sessions WHERE source = 'claude') as claude_sessions,
-                (SELECT COUNT(*) FROM sessions WHERE source = 'codex') as codex_sessions,
+                (SELECT COUNT(*) FROM sessions WHERE turn_count > 0) as total_sessions,
+                (SELECT COUNT(*) FROM sessions WHERE source = 'claude' AND turn_count > 0) as claude_sessions,
+                (SELECT COUNT(*) FROM sessions WHERE source = 'codex' AND turn_count > 0) as codex_sessions,
                 (SELECT COUNT(*) FROM turns) as total_turns,
                 (SELECT MAX(timestamp) FROM turns) as last_indexed,
                 (SELECT COUNT(*) FROM search_log) as total_searches,

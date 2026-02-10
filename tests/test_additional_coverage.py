@@ -116,6 +116,9 @@ class TestCoreAdditional(TestCase):
         self.assertEqual(self.store.recent_sessions(workspace="no-match"), [])
 
     def test_stats_aggregation_values(self):
+        # Add an orphan session (no turns) — should be excluded from counts
+        self.store.ensure_session("sess-orphan", source="claude", workspace_path="/tmp")
+
         self.store.conn.execute(
             "INSERT INTO search_log (query, result_count, workspace) VALUES (?, ?, ?)",
             ("auth", 2, "crustland"),
@@ -127,7 +130,7 @@ class TestCoreAdditional(TestCase):
         self.store.conn.commit()
 
         stats = self.store.stats()
-        self.assertEqual(stats["total_sessions"], 2)
+        self.assertEqual(stats["total_sessions"], 2)  # orphan excluded
         self.assertEqual(stats["claude_sessions"], 1)
         self.assertEqual(stats["codex_sessions"], 1)
         self.assertEqual(stats["total_turns"], 2)
@@ -284,18 +287,17 @@ class TestInstallHooks(TestCase):
 
                 stop_cmds = self._event_commands(first["hooks"]["Stop"])
                 session_cmds = self._event_commands(first["hooks"]["SessionEnd"])
-                prompt_cmds = self._event_commands(first["hooks"]["UserPromptSubmit"])
 
                 self.assertIn("python3 /tmp/other-stop.py", stop_cmds)
                 self.assertIn("python3 /tmp/other-session.py", session_cmds)
                 self.assertEqual(sum("rekal" in cmd for cmd in stop_cmds), 1)
                 self.assertEqual(sum("rekal" in cmd for cmd in session_cmds), 1)
-                self.assertEqual(sum("rekal" in cmd for cmd in prompt_cmds), 1)
+                self.assertNotIn("UserPromptSubmit", first["hooks"])
 
                 install.install_claude_hooks()
                 second = json.loads(settings_path.read_text())
 
-            for event in ("Stop", "SessionEnd", "UserPromptSubmit"):
+            for event in ("Stop", "SessionEnd"):
                 commands = self._event_commands(second["hooks"][event])
                 self.assertEqual(sum("rekal" in cmd for cmd in commands), 1)
         finally:

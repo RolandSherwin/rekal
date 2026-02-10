@@ -1,6 +1,10 @@
-# Rekal
+<p align="center">
+  <img src="banner.png" alt="Rekal" width="600">
+</p>
 
-Local memory for AI coding sessions. Automatically indexes what you do in Claude Code and Codex, then lets you search it later.
+<p align="center">Local memory for AI coding sessions.<br>Automatically indexes what you do in Claude Code and Codex, then lets you search it later.</p>
+
+---
 
 ## What it does
 

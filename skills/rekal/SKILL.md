@@ -5,7 +5,7 @@ description: >-
   "search history", "what did I do", "recall", "rekal", "past sessions",
   or wants to find previous work, avoid repeating solutions, or continue
   where a previous session left off.
-argument-hint: "[query | --recent | --session <id>]"
+argument-hint: "[query | --recent | --session <id> | --stats]"
 ---
 
 Run the Rekal search tool with the user's query:
@@ -20,6 +20,7 @@ PYTHONPATH="$REKAL_REPO" python3 -m rekal.search $ARGUMENTS
 - `/rekal --recent` or `/rekal --recent 20` — Show N most recent sessions (default 10).
 - `/rekal --session <id>` — Show all turns for a session. Use the session ID from search results (prefix or full).
 - `/rekal --workspace <path>` — Filter results to a specific project.
+- `/rekal --stats` — Show usage statistics (sessions, turns indexed, search hit rate).
 - Flags combine: `/rekal auth --workspace crustland --limit 5`
 
 ## How to use results

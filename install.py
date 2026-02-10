@@ -17,31 +17,26 @@ CODEX_SKILLS = Path.home() / ".codex" / "skills"
 HOOKS_DIR = REPO_DIR / "hooks"
 
 # Hook definitions for Claude Code settings.json
+# Each value is a single hook object (will be wrapped in matcher group if needed)
 CLAUDE_HOOKS = {
-    "Stop": [
-        {
-            "type": "command",
-            "command": f"python3 {HOOKS_DIR / 'on_turn_complete.py'}",
-            "async": True,
-            "timeout": 30000,
-        }
-    ],
-    "SessionEnd": [
-        {
-            "type": "command",
-            "command": f"python3 {HOOKS_DIR / 'on_session_end.py'}",
-            "async": True,
-            "timeout": 30000,
-        }
-    ],
-    "UserPromptSubmit": [
-        {
-            "type": "command",
-            "command": f"python3 {HOOKS_DIR / 'on_prompt.py'}",
-            "async": True,
-            "timeout": 15000,
-        }
-    ],
+    "Stop": {
+        "type": "command",
+        "command": f"python3 {HOOKS_DIR / 'on_turn_complete.py'}",
+        "async": True,
+        "timeout": 30000,
+    },
+    "SessionEnd": {
+        "type": "command",
+        "command": f"python3 {HOOKS_DIR / 'on_session_end.py'}",
+        "async": True,
+        "timeout": 30000,
+    },
+    "UserPromptSubmit": {
+        "type": "command",
+        "command": f"python3 {HOOKS_DIR / 'on_prompt.py'}",
+        "async": True,
+        "timeout": 15000,
+    },
 }
 
 MARKER = "# rekal-hook"
@@ -49,6 +44,21 @@ MARKER = "# rekal-hook"
 
 def step(msg: str):
     print(f"  -> {msg}")
+
+
+def _hooks_contain_rekal(hook_list: list) -> bool:
+    """Check if 'rekal' appears in any hook command, handling both formats."""
+    for h in hook_list:
+        if not isinstance(h, dict):
+            continue
+        # Flat format: {"type": "command", "command": "..."}
+        if "rekal" in h.get("command", ""):
+            return True
+        # Matcher format: {"matcher": "", "hooks": [{"command": "..."}]}
+        for inner in h.get("hooks", []):
+            if isinstance(inner, dict) and "rekal" in inner.get("command", ""):
+                return True
+    return False
 
 
 def install_rekal_dir():
@@ -87,19 +97,26 @@ def install_claude_hooks():
     hooks = settings.get("hooks", {})
     modified = False
 
-    for event, hook_list in CLAUDE_HOOKS.items():
+    for event, hook_obj in CLAUDE_HOOKS.items():
         existing = hooks.get(event, [])
 
-        # Check if rekal hook already installed
-        already_installed = any(
-            "rekal" in (h.get("command", "") if isinstance(h, dict) else "")
-            for h in existing
-        )
-        if already_installed:
+        # Check if rekal hook already installed (handles both flat and matcher formats)
+        if _hooks_contain_rekal(existing):
             step(f"Claude {event} hook already installed")
             continue
 
-        existing.extend(hook_list)
+        # Detect format: matcher groups have "hooks" key, flat hooks have "type" key
+        uses_matcher = any(isinstance(h, dict) and "hooks" in h for h in existing)
+
+        if uses_matcher or not existing:
+            # Wrap in matcher group to match existing format
+            existing.append({
+                "matcher": "",
+                "hooks": [hook_obj],
+            })
+        else:
+            existing.append(hook_obj)
+
         hooks[event] = existing
         modified = True
         step(f"Added Claude {event} async hook")

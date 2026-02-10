@@ -48,6 +48,14 @@ CREATE TABLE IF NOT EXISTS event_sessions (
     PRIMARY KEY (event_id, session_id)
 );
 
+CREATE TABLE IF NOT EXISTS search_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    query TEXT NOT NULL,
+    result_count INTEGER DEFAULT 0,
+    workspace TEXT,
+    searched_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id);
 CREATE INDEX IF NOT EXISTS idx_turns_timestamp ON turns(timestamp);
 CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at);
@@ -226,7 +234,19 @@ class RekalStore:
             scored.append(row_dict)
 
         scored.sort(key=lambda x: x["score"], reverse=True)
-        return scored[:limit]
+        results = scored[:limit]
+
+        # Log the search
+        try:
+            self.conn.execute(
+                "INSERT INTO search_log (query, result_count, workspace) VALUES (?, ?, ?)",
+                (query, len(results), workspace),
+            )
+            self.conn.commit()
+        except Exception:
+            pass  # Don't break search if logging fails
+
+        return results
 
     def recent_sessions(self, workspace: str | None = None,
                         limit: int = 10) -> list[dict]:
@@ -271,6 +291,21 @@ class RekalStore:
         resolved_id = result["session_id"]
         result["turns"] = self.get_session_turns(resolved_id)
         return result
+
+    def stats(self) -> dict:
+        """Return usage statistics."""
+        row = self.conn.execute(
+            """SELECT
+                (SELECT COUNT(*) FROM sessions) as total_sessions,
+                (SELECT COUNT(*) FROM sessions WHERE source = 'claude') as claude_sessions,
+                (SELECT COUNT(*) FROM sessions WHERE source = 'codex') as codex_sessions,
+                (SELECT COUNT(*) FROM turns) as total_turns,
+                (SELECT MAX(timestamp) FROM turns) as last_indexed,
+                (SELECT COUNT(*) FROM search_log) as total_searches,
+                (SELECT COUNT(*) FROM search_log WHERE result_count > 0) as searches_with_hits,
+                (SELECT AVG(result_count) FROM search_log) as avg_results"""
+        ).fetchone()
+        return dict(row)
 
     def close(self):
         self.conn.close()

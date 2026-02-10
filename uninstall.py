@@ -29,10 +29,25 @@ def remove_claude_hooks():
 
     for event in list(hooks.keys()):
         original = hooks[event]
-        filtered = [
-            h for h in original
-            if not (isinstance(h, dict) and "rekal" in h.get("command", ""))
-        ]
+        filtered = []
+        for h in original:
+            if not isinstance(h, dict):
+                filtered.append(h)
+                continue
+            # Flat format: check command directly
+            if "rekal" in h.get("command", ""):
+                continue
+            # Matcher format: filter inner hooks
+            if "hooks" in h:
+                inner = [ih for ih in h["hooks"]
+                         if not (isinstance(ih, dict) and "rekal" in ih.get("command", ""))]
+                if inner:
+                    h["hooks"] = inner
+                    filtered.append(h)
+                # Drop entire matcher group if no hooks left
+                continue
+            filtered.append(h)
+
         if len(filtered) != len(original):
             hooks[event] = filtered
             if not filtered:

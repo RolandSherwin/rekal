@@ -125,6 +125,31 @@ def format_session_detail(detail: dict) -> str:
     return "\n".join(lines)
 
 
+def format_stats(stats: dict) -> str:
+    total = stats.get("total_sessions", 0)
+    claude = stats.get("claude_sessions", 0)
+    codex = stats.get("codex_sessions", 0)
+    turns = stats.get("total_turns", 0)
+    last = stats.get("last_indexed") or "never"
+    searches = stats.get("total_searches", 0)
+    hits = stats.get("searches_with_hits", 0)
+    avg = stats.get("avg_results") or 0
+    hit_rate = f"{hits / searches * 100:.0f}%" if searches > 0 else "—"
+
+    lines = [
+        "# Rekal Stats",
+        "",
+        f"Sessions: {total} ({claude} claude, {codex} codex)",
+        f"Turns indexed: {turns}",
+        f"Last indexed: {last}",
+        "",
+        f"Searches: {searches}",
+        f"Hit rate: {hit_rate} ({hits}/{searches} returned results)",
+        f"Avg results per search: {avg:.1f}",
+    ]
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Rekal — search your coding session history")
     parser.add_argument("query", nargs="*", help="Search query")
@@ -136,13 +161,17 @@ def main():
                         help="Filter by workspace path")
     parser.add_argument("--limit", type=int, default=15,
                         help="Max results (default 15)")
+    parser.add_argument("--stats", action="store_true",
+                        help="Show usage statistics")
     args = parser.parse_args()
 
     config = load_config()
     store = RekalStore(config)
 
     try:
-        if args.session:
+        if args.stats:
+            print(format_stats(store.stats()))
+        elif args.session:
             detail = store.session_detail(args.session)
             print(format_session_detail(detail))
         elif args.recent is not None:

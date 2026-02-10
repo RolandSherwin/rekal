@@ -1,0 +1,26 @@
+# Rekal — Local AI Coding Session Memory
+# No API keys needed — uses your existing Claude Code or Codex CLI
+
+# Which CLI to use for summarization: "claude" or "codex"
+# Claude Code uses Anthropic models (haiku, sonnet, opus)
+# Codex uses OpenAI models (o4-mini, o3, gpt-4.1, etc)
+provider: claude
+
+# Model for summarization (smallest/cheapest recommended)
+# Claude: haiku (default), sonnet, opus
+# Codex: o4-mini (default), o3, gpt-4.1
+model: haiku
+
+# Database path (default: ~/.rekal/db.sqlite)
+db_path: ~/.rekal/db.sqlite
+
+# Enable/disable without uninstalling
+enabled: true
+
+# CLI call timeout in seconds
+timeout: 30
+
+# Max chars sent to LLM per turn (controls cost)
+max_prompt_chars: 4000
+max_response_chars: 8000
+max_edit_chars: 2000

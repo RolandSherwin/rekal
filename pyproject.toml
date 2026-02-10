@@ -1,0 +1,13 @@
+[project]
+name = "rekal"
+version = "0.1.0"
+description = "Local AI coding session memory — recall without the leak"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["pyyaml>=6.0"]
+
+[project.scripts]
+rekal = "rekal.search:main"

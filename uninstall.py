@@ -30,17 +30,24 @@ def remove_claude_hooks():
     for event in list(hooks.keys()):
         original = hooks[event]
         filtered = []
+        event_modified = False
         for h in original:
             if not isinstance(h, dict):
                 filtered.append(h)
                 continue
             # Flat format: check command directly
             if "rekal" in h.get("command", ""):
+                modified = True
+                event_modified = True
                 continue
             # Matcher format: filter inner hooks
             if "hooks" in h:
+                before = len(h["hooks"])
                 inner = [ih for ih in h["hooks"]
                          if not (isinstance(ih, dict) and "rekal" in ih.get("command", ""))]
+                if len(inner) != before:
+                    modified = True
+                    event_modified = True
                 if inner:
                     h["hooks"] = inner
                     filtered.append(h)
@@ -48,11 +55,10 @@ def remove_claude_hooks():
                 continue
             filtered.append(h)
 
-        if len(filtered) != len(original):
-            hooks[event] = filtered
-            if not filtered:
-                del hooks[event]
-            modified = True
+        hooks[event] = filtered
+        if not filtered:
+            del hooks[event]
+        if event_modified:
             step(f"Removed Claude {event} hook")
 
     if modified:

@@ -1,11 +1,14 @@
 """SQLite store with FTS5 and scored search."""
 
+import logging
 import math
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import RekalConfig, load_config
+
+log = logging.getLogger("rekal")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -34,20 +37,6 @@ CREATE TABLE IF NOT EXISTS turns (
     UNIQUE(session_id, turn_number)
 );
 
-CREATE TABLE IF NOT EXISTS events (
-    event_id TEXT PRIMARY KEY,
-    title TEXT,
-    description TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS event_sessions (
-    event_id TEXT NOT NULL REFERENCES events(event_id),
-    session_id TEXT NOT NULL REFERENCES sessions(session_id),
-    PRIMARY KEY (event_id, session_id)
-);
-
 CREATE TABLE IF NOT EXISTS search_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     query TEXT NOT NULL,
@@ -72,12 +61,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS turns_fts USING fts5(
     content_rowid='id'
 );
 
-CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
-    title,
-    summary,
-    content='sessions',
-    content_rowid='rowid'
-);
 """
 
 # Triggers must be created separately (no IF NOT EXISTS for triggers)
@@ -110,7 +93,7 @@ class RekalStore:
         self.config = config or load_config()
         db_path = self.config.db_path_resolved
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(db_path))
+        self.conn = sqlite3.connect(str(db_path), timeout=5.0)
         self.conn.row_factory = sqlite3.Row
         self._init_schema()
 
@@ -243,8 +226,8 @@ class RekalStore:
                 (query, len(results), workspace),
             )
             self.conn.commit()
-        except Exception:
-            pass  # Don't break search if logging fails
+        except Exception as e:
+            log.debug("search_log insert failed: %s", e)
 
         return results
 

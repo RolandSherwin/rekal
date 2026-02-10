@@ -3,17 +3,23 @@
 import json
 import os
 import re
+import sqlite3
+import subprocess
+import sys
 import tempfile
+import textwrap
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import TestCase, main
 
-import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rekal.config import RekalConfig, load_config
 from rekal.core import RekalStore
 from rekal.parser import parse_transcript, extract_latest_turn
 from rekal.search import format_recent_sessions, format_search_results
+import uninstall
 
 
 def make_store(db_path: str | None = None) -> RekalStore:
@@ -237,6 +243,142 @@ class TestConfig(TestCase):
             self.assertEqual(config.model, "o4-mini")
             self.assertFalse(hasattr(config, "unknown_key"))
         finally:
+            path.unlink(missing_ok=True)
+
+
+class TestHookFallback(TestCase):
+    def _repo_root(self) -> Path:
+        return Path(__file__).resolve().parent.parent
+
+    def _run_hook_and_read_tags(self, script: str, payload: dict, provider: str, model: str) -> tuple[int, str]:
+        home = Path(tempfile.mkdtemp(prefix="rekal_home_"))
+        (home / ".rekal").mkdir(parents=True, exist_ok=True)
+        (home / ".rekal" / "config.yaml").write_text(
+            textwrap.dedent(
+                f"""
+                provider: {provider}
+                model: {model}
+                enabled: true
+                """
+            ).strip() + "\n"
+        )
+
+        env = {
+            **os.environ,
+            "HOME": str(home),
+            # Exclude claude/codex CLI from PATH so summarize_turn uses fallback.
+            "PATH": "/usr/bin:/bin",
+            "PYTHONPATH": str(self._repo_root()),
+        }
+        proc = subprocess.run(
+            [sys.executable, str(self._repo_root() / script)],
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            cwd=str(self._repo_root()),
+            env=env,
+        )
+
+        db = home / ".rekal" / "db.sqlite"
+        self.assertTrue(db.exists(), msg=f"db not created; stderr={proc.stderr}")
+        conn = sqlite3.connect(str(db))
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM turns").fetchone()[0]
+            self.assertEqual(count, 1, msg=f"hook failed; stderr={proc.stderr}")
+            tags = conn.execute("SELECT tags FROM turns LIMIT 1").fetchone()[0]
+        finally:
+            conn.close()
+
+        return proc.returncode, tags
+
+    def test_on_turn_complete_fallback_stores_string_tags(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({"type": "user", "message": {"content": "do x"}}) + "\n")
+            f.write(
+                json.dumps(
+                    {"type": "assistant", "message": {"content": [{"type": "text", "text": "done x"}]}}
+                )
+                + "\n"
+            )
+            transcript_path = f.name
+        try:
+            payload = {
+                "session_id": "sess1",
+                "transcript_path": transcript_path,
+                "cwd": "/tmp/project",
+            }
+            rc, tags = self._run_hook_and_read_tags(
+                "hooks/on_turn_complete.py",
+                payload,
+                provider="claude",
+                model="haiku",
+            )
+            self.assertEqual(rc, 0)
+            self.assertIsInstance(tags, str)
+        finally:
+            os.unlink(transcript_path)
+
+    def test_on_codex_turn_fallback_stores_string_tags(self):
+        payload = {
+            "type": "agent-turn-complete",
+            "thread-id": "th123",
+            "cwd": "/tmp/project",
+            "input-messages": [{"role": "user", "content": "fix auth bug"}],
+            "last-assistant-message": "done",
+        }
+        rc, tags = self._run_hook_and_read_tags(
+            "hooks/on_codex_turn.py",
+            payload,
+            provider="codex",
+            model="o4-mini",
+        )
+        self.assertEqual(rc, 0)
+        self.assertIsInstance(tags, str)
+
+
+class TestUninstall(TestCase):
+    def test_remove_claude_hooks_matcher_format_and_event_messages(self):
+        fd, path_str = tempfile.mkstemp(suffix=".json")
+        os.close(fd)
+        path = Path(path_str)
+        settings = {
+            "hooks": {
+                "Stop": [
+                    {
+                        "matcher": "",
+                        "hooks": [
+                            {"type": "command", "command": "python3 /x/rekal/hook.py"},
+                            {"type": "command", "command": "python3 /x/other.py"},
+                        ],
+                    }
+                ],
+                "SessionEnd": [
+                    {
+                        "matcher": "",
+                        "hooks": [{"type": "command", "command": "python3 /x/other2.py"}],
+                    }
+                ],
+            }
+        }
+        path.write_text(json.dumps(settings, indent=2))
+
+        old_settings = uninstall.CLAUDE_SETTINGS
+        uninstall.CLAUDE_SETTINGS = path
+        stdout_buf = StringIO()
+        try:
+            with redirect_stdout(stdout_buf):
+                uninstall.remove_claude_hooks()
+            updated = json.loads(path.read_text())
+            stop_hooks = updated["hooks"]["Stop"][0]["hooks"]
+            self.assertEqual(len(stop_hooks), 1)
+            self.assertIn("/x/other.py", stop_hooks[0]["command"])
+
+            # Ensure we don't report unrelated events as removed.
+            output = stdout_buf.getvalue()
+            self.assertIn("Removed Claude Stop hook", output)
+            self.assertNotIn("Removed Claude SessionEnd hook", output)
+        finally:
+            uninstall.CLAUDE_SETTINGS = old_settings
             path.unlink(missing_ok=True)
 
 

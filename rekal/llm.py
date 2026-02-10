@@ -138,13 +138,15 @@ FILES CHANGED:
         return {
             "title": prompt[:60] if prompt else "Untitled turn",
             "description": "- Summarization failed",
-            "tags": [],
+            "tags": "",
         }
 
-    # Normalize tags to comma-separated string
-    tags = result.get("tags", [])
+    # Normalize tags to comma-separated string (LLM may return list, None, or string)
+    tags = result.get("tags")
     if isinstance(tags, list):
         result["tags"] = ", ".join(str(t) for t in tags)
+    elif not isinstance(tags, str):
+        result["tags"] = ""
 
     return result
 

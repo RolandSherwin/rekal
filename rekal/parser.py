@@ -44,13 +44,15 @@ def parse_transcript(transcript_path: str | Path) -> dict:
             if msg_type == "user":
                 content = message.get("content", "")
                 if isinstance(content, str):
-                    user_parts.append(content)
-                    turn_count += 1
+                    if content:
+                        user_parts.append(content)
+                        turn_count += 1
                 elif isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            user_parts.append(block["text"])
-                            turn_count += 1
+                    texts = [b["text"] for b in content
+                             if isinstance(b, dict) and b.get("type") == "text"]
+                    if texts:
+                        user_parts.append(" ".join(texts))
+                        turn_count += 1
 
             elif msg_type == "assistant":
                 content = message.get("content", [])

@@ -38,12 +38,14 @@ def load_config(path: Path | None = None) -> RekalConfig:
         return RekalConfig()
 
     if HAS_YAML:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
+        if not isinstance(data, dict):
+            return RekalConfig()
     else:
         # Minimal YAML-like parser for simple key: value configs
         data = {}
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
